@@ -20,7 +20,6 @@ from bs4 import BeautifulSoup
 # # from selenium.webdriver.common.keys import Keys
 from tqdm import tqdm
 
-
 header = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 Chrome/103.0.0.0 '  # 
                   'Safari/537.36',
@@ -30,9 +29,19 @@ header = {
 }
 
 
+def check_connect():
+    # 通过检验网页标题顺利加载，来断定网站服务正常
+    check = requests.get('https://www.gequbao.com/', timeout=7)
+    soup = BeautifulSoup(check.text, 'lxml')
+    if '歌曲宝' in (title := soup.title.string):
+        return title
+    else:
+        return None
+
+
 def url_music_name(name_put):
-    urlReady = "https://www.gequbao.com/s/" + name_put  # 拉取音乐页面，获取音乐标签里的关键信息
-    site = requests.get(urlReady)
+    url_ready = "https://www.gequbao.com/s/" + name_put  # 拉取音乐页面，获取音乐标签里的关键信息
+    site = requests.get(url_ready)
     # bs方法获取标签内容
     bs = BeautifulSoup(site.text, "lxml")  # hml.parser解析不能对复杂内容处理，这里使用lxml
     bs_tag = bs.select(".text-primary.font-weight-bold")  # 通过class属性定位到标签
@@ -50,30 +59,30 @@ def url_music_name(name_put):
 
 
 def second_url_name(name):
-    urlReady = "https://www.gequbao.com/s/" + name
-    site = requests.get(urlReady)
+    another_url = "https://www.gequbao.com/s/" + name
+    site = requests.get(another_url, headers=header)
 
     # bs方法获取标签内容
     bs = BeautifulSoup(site.text, "lxml")  # html.parser解析不能对复杂内容处理，这里使用lxml
     bst_tag = bs.find_all('tr')  # 通过tr标签匹配
 
     print("\n【注意】：当搜索的是歌曲名时，为节省资源，\n  将仅下载搜索结果的前五首歌曲！  ")
-    CertainContent = []
+    list_from_bs = []
     for urlMusicName in bst_tag[1:6]:
-        noReady = str(urlMusicName)[57:-56].split("\n")
-        # print(noReady)
-        CertainContent.append([noReady[0], noReady[-1]])
+        not_ready = str(urlMusicName)[57:-56].split("\n")
+        # print(not_ready)
+        list_from_bs.append([not_ready[0], not_ready[-1]])
     print("----------------")
-    OUM = []
-    for m, n in CertainContent:
-        urlStr = m.split("\">")[0]  # 很好，数据越来越短，离想提取的数据越来越近。这里利用切片和数组索引那到了第一个值
-        MusicName = m.split("\">")[1]
+    out = []
+    for m, n in list_from_bs:
+        url_put = m.split("\">")[0]  # 很好，数据越来越短，离想提取的数据越来越近。这里利用切片和数组索引那到了第一个值
+        music_may_put = m.split("\">")[1]
         singer = n.strip('<td class="text-success">')
 
-        MusicNameStr = MusicName + "_" + singer
-        # print(f"MusicName's Content is |{MusicNameStr}|")
-        OUM.append([urlStr, MusicNameStr])  # 添加到列表后，我们看看是不是真的提取到了这两个值
-    return OUM
+        music_put = music_may_put + "_" + singer
+        # print(f"music_may_put's Content is |{music_put}|")
+        out.append([url_put, music_put])  # 添加到列表后，我们看看是不是真的提取到了这两个值
+    return out
 
 
 # 想办法由列表数据，生成一个只含下载链接的数组
@@ -229,9 +238,9 @@ def fileDownloadUsingRequests(file_url, music_name):
     file_name = music_name.replace(",", "") + file_suf
     print(f"已获取歌名：{file_name}！")
     pwd = os.path.join(os.getcwd(), input_name, file_name)
-    fileDir = os.path.join(os.getcwd(), input_name)
+    file_position = os.path.join(os.getcwd(), input_name)
     # print(pwd)
-    if not os.path.exists(fileDir):
+    if not os.path.exists(file_position):
         os.mkdir(input_name)
         print(f"目录'{input_name}'已创建！")
 
@@ -251,28 +260,28 @@ def fileDownloadUsingRequests(file_url, music_name):
         print(e)
         quit()
     chunk_size = 1024
-    total_size = int(r.headers['Content-Length'])
 
-    total_chunks = total_size / chunk_size
-    print('歌曲包totalsize：%.2fKB' % total_chunks)
+    # total_size = int(r.headers['Content-Length'])
+    # 对headers['Content-Length']无值的情况作跳过处理
+    if getValue := r.headers.get('Content-Length'):
+        total_chunks = int(getValue) / chunk_size
+        print('歌曲包totalSize：%.2fKB' % total_chunks)
 
-    file_iterable = r.iter_content(chunk_size=chunk_size)
-    # 用tqdm进度提示信息，包括执行进度、处理速度等信息，且可在一定程度上进行定制。
-    tqdm_iter = tqdm(iterable=file_iterable, total=total_chunks, unit='KB',
-                     leave=False, colour='MAGENTA'
-                     )
-    with open(pwd, 'wb') as f:  # file_name
-        for data in tqdm_iter:
-            f.write(data)  # 字节写入
+        file_iterable = r.iter_content(chunk_size=chunk_size)
+        # 用tqdm进度提示信息，包括执行进度、处理速度等信息，且可在一定程度上进行定制。
+        tqdm_iter = tqdm(iterable=file_iterable, total=total_chunks, unit='KB',
+                         leave=False, colour='MAGENTA'
+                         )
+        with open(pwd, 'wb') as f:  # file_name
+            for data in tqdm_iter:
+                f.write(data)  # 字节写入
 
-    # total_size=float(r.headers['Content-Length'])/(1024*1024)
-    '''
-    print 'Total size of file to be downloaded %.2f MB '%total_size
-    '''
-    f.close()
-    print('Downloaded file %s' % file_name)
-    print(print("------------------------------------\n"))  # 因为是循环写入，加上换行，便于查看
-
+        print('Downloaded file %s\n------------------------------------' % file_name)
+    else:
+        print(f'检测到歌曲：{file_name}下载链接已失效！')
+        with open(r'.\失效歌曲.txt', 'a') as newF:
+            newF.write(file_name)
+        return
 
 
 if __name__ == "__main__":
@@ -291,18 +300,21 @@ if __name__ == "__main__":
         try:
             input_name = input("请输入要搜索的内容：")
             if input_name:
-                print('歌曲下载源的解析速率取决于源服务器效率，下载时长取决于歌曲大小，请耐心等待！')
+                print('~~~即将校验搜索搭载的服务是否可用~~~')
+                if check_connect():
+                    print('服务正常，网络可用！')
+                    print('歌曲下载源的解析速率取决于源服务器效率，下载时长取决于歌曲大小，请耐心等待！')
+                else:
+                    print('歌曲源出现问题，请联系作者更新歌曲源！作者:bg110123@gmail.com')
                 break
         finally:
             pass
+
     if down_type == "1":
         get_now = getDownUrl(url_music_name(input_name))
         if len(get_now) < 1:
             print('暂未搜索到歌曲资源，请等待作者更新歌源！')
-            print('5秒钟后将会关闭下载通道~~~')
-            for i in range(5)[::-1]:
-                print(f'还剩 {i + 1} 秒！')
-                time.sleep(1)
+            print('按ctrl C退出程序~~~')
         else:
             for du, dn in get_now:
                 fileDownloadUsingRequests(du, dn)
@@ -312,17 +324,15 @@ if __name__ == "__main__":
         print(letGo)
         if len(letGo) < 1:
             print('暂未搜索到歌曲资源，请等待作者更新歌源！')
-            print('5秒钟后将会关闭下载通道~~~')
-            for i in range(5)[::-1]:
-                print(f'还剩 {i + 1} 秒！')
-                time.sleep(1)
+            print('按ctrl C退出程序~~~')
+
         else:
             for mm, nn in letGo:
                 fileDownloadUsingRequests(mm, nn)
-            print("\n全部下载：已完成！<-- Author:HuZK --> 将在8秒后自动关闭窗口！")
-            for i in range(8)[::-1]:
-                print(f'还剩 {i + 1} 秒！')
-                time.sleep(1)
-            # time.sleep(8)  # 打包成EXE文件必备停顿
+            print("\n全部下载：已完成！<-- Author:HuZK --> 将在18秒后自动关闭窗口！")
+
     else:
         print("Unknown error.Check ur code again pls.")
+    for i in range(18)[::-1]:
+        print(f'窗口关闭倒计时： {i + 1} 秒！')
+        time.sleep(1)
